@@ -696,7 +696,7 @@ input[type=date]:focus { border-color: #4a90d9; }
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
     Upload Dataset
   </button>
-  <button class="upload-btn" style="background:linear-gradient(135deg,#1a4a2a,#0f2e18);border-color:#2a7a4a;color:#7ecfa8;" onclick="document.getElementById('file-input-default').click()" title="Load from: D:\HIL_HKD_SMELTER_ALF3_RECOMMENDATION\Data\HKD_POTLINES_CONSOLIDATED.parquet">
+  <button class="upload-btn" style="background:linear-gradient(135deg,#1a4a2a,#0f2e18);border-color:#2a7a4a;color:#7ecfa8;" onclick="document.getElementById('file-input-default').click()" title="Load from: github.com/ShlokCerebulb/dashboard">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
     Load Default Data
   </button>
@@ -1181,53 +1181,51 @@ dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.
 function handleFileSelect(e) { handleFiles(e.target.files); e.target.value = ''; }
 
 function loadFromDefaultPath() {
-  const DEFAULT_PARQUET_PATH = '../Data/HKD_POTLINES_CONSOLIDATED.parquet';
+  const DEFAULT_PARQUET_PATH = 'https://raw.githubusercontent.com/ShlokCerebulb/dashboard/main/HKD_POTLINES_CONSOLIDATED.parquet';
   const DEFAULT_FILE_NAME    = 'HKD_POTLINES_CONSOLIDATED.parquet';
 
   showLoading('Loading default dataset…');
 
-  // Use XMLHttpRequest so it works under file:// without CORS issues
-  const xhr = new XMLHttpRequest();
-  xhr.open('GET', DEFAULT_PARQUET_PATH, true);
-  xhr.responseType = 'arraybuffer';
-
-  xhr.onload = async function () {
-    if (xhr.status !== 200 && xhr.status !== 0) {
-      hideLoading();
-      alert('Could not load the default dataset.\n\nMake sure the file exists at:\n' + DEFAULT_PARQUET_PATH + '\n\nHTTP status: ' + xhr.status);
-      return;
-    }
-    const buf = xhr.response;
-    if (!buf || buf.byteLength === 0) {
-      hideLoading();
-      alert('Default dataset file is empty or could not be read.');
-      return;
-    }
-    try {
-      showLoading('Parsing ' + DEFAULT_FILE_NAME + '…');
-      const { parquetReadObjects } = window.HyParquet;
-      const asyncBuf = {
-        byteLength: buf.byteLength,
-        slice: (start, end) => Promise.resolve(buf.slice(start, end))
-      };
-      const rawRows = await parquetReadObjects({ file: asyncBuf });
-      if (!rawRows || !rawRows.length) {
+  fetch(DEFAULT_PARQUET_PATH)
+    .then(res => {
+      if (!res.ok) {
         hideLoading();
-        alert('No data rows found in the default Parquet file.');
+        alert('Could not load the default dataset.\n\nURL: ' + DEFAULT_PARQUET_PATH + '\n\nHTTP status: ' + res.status);
+        throw new Error('HTTP ' + res.status);
+      }
+      return res.arrayBuffer();
+    })
+    .then(async buf => {
+      if (!buf || buf.byteLength === 0) {
+        hideLoading();
+        alert('Default dataset file is empty or could not be read.');
         return;
       }
-      const headers = Object.keys(rawRows[0]);
+      try {
+        showLoading('Parsing ' + DEFAULT_FILE_NAME + '…');
+        const { parquetReadObjects } = window.HyParquet;
+        const asyncBuf = {
+          byteLength: buf.byteLength,
+          slice: (start, end) => Promise.resolve(buf.slice(start, end))
+        };
+        const rawRows = await parquetReadObjects({ file: asyncBuf });
+        if (!rawRows || !rawRows.length) {
+          hideLoading();
+          alert('No data rows found in the default Parquet file.');
+          return;
+        }
+        const headers = Object.keys(rawRows[0]);
 
-      // Normalise: BigInt → Number, Date → ISO string, objects → string
-      showLoading('Processing rows…');
-      const rows = rawRows.map(raw => {
-        const obj = {};
-        headers.forEach(h => {
-          let v = raw[h];
-          if (v === null || v === undefined)  { obj[h] = null; return; }
-          if (typeof v === 'bigint')           { obj[h] = Number(v); return; }
-          if (v instanceof Date)               { obj[h] = v.toISOString().slice(0, 10); return; }
-          if (typeof v === 'object')           { obj[h] = String(v); return; }
+        // Normalise: BigInt → Number, Date → ISO string, objects → string
+        showLoading('Processing rows…');
+        const rows = rawRows.map(raw => {
+          const obj = {};
+          headers.forEach(h => {
+            let v = raw[h];
+            if (v === null || v === undefined)  { obj[h] = null; return; }
+            if (typeof v === 'bigint')           { obj[h] = Number(v); return; }
+            if (v instanceof Date)               { obj[h] = v.toISOString().slice(0, 10); return; }
+            if (typeof v === 'object')           { obj[h] = String(v); return; }
           obj[h] = v;
         });
         return obj;
@@ -1333,20 +1331,16 @@ function loadFromDefaultPath() {
       hideLoading();
       alert('Error parsing default dataset:\n' + err.message);
     }
-  };
-
-  xhr.onerror = function () {
-    hideLoading();
-    alert(
-      'Failed to load the default dataset.\n\n' +
-      'If you are opening this file directly in a browser (file://), some browsers block local file access.\n\n' +
-      'Solutions:\n' +
-      '1. Use Microsoft Edge or Firefox (they allow local file:// access)\n' +
-      '2. Or use "Upload a File" and browse to:\n   D:\\HIL_HKD_SMELTER_ALF3_RECOMMENDATION\\Data\\HKD_POTLINES_CONSOLIDATED.parquet'
-    );
-  };
-
-  xhr.send();
+    })
+    .catch(err => {
+      hideLoading();
+      if (err.message && err.message.startsWith('HTTP')) return; // already alerted above
+      alert(
+        'Failed to load the default dataset.\n\n' +
+        'URL: ' + DEFAULT_PARQUET_PATH + '\n\n' +
+        'Error: ' + err.message
+      );
+    });
 }
 function handleFiles(files) {
   if (!files || !files.length) return;
