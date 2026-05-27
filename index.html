@@ -974,8 +974,12 @@ input[type=date]:focus { border-color: #4a90d9; }
       <!-- Header -->
       <div class="comp-header">
         <span class="comp-title">&#9878; Compliance</span>
-        <span class="comp-subtitle" id="comp-subtitle">ALF&#8323; Consumption vs Age-Corrected</span>
+        <span class="comp-subtitle" id="comp-subtitle" style="overflow:hidden;text-overflow:ellipsis;">ALF&#8323; Consumption vs Age-Corrected</span>
+        <button onclick="toggleCompliancePanel()" id="comp-panel-toggle-btn" title="Close compliance panel" style="margin-left:auto;flex-shrink:0;background:none;border:1px solid #2a3a5a;border-radius:4px;color:#6a80aa;font-size:0.8rem;cursor:pointer;padding:2px 8px;line-height:1.4;transition:background 0.15s,color 0.15s;" onmouseover="this.style.background='#1a2240';this.style.color='#e04444'" onmouseout="this.style.background='none';this.style.color='#6a80aa'">&#10005;</button>
       </div>
+
+      <!-- Collapsible body -->
+      <div id="comp-panel-body" style="display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;">
 
       <!-- KPI Cards -->
       <div class="comp-kpi-row">
@@ -1014,7 +1018,16 @@ input[type=date]:focus { border-color: #4a90d9; }
         <div style="color:#3a4060;font-size:0.74rem;margin-top:6px">Ensure both columns are mapped when loading data.</div>
       </div>
 
+      </div><!-- /comp-panel-body -->
+
     </div><!-- /ph-compliance-panel -->
+
+    <!-- Compliance re-open tab (visible only when panel is closed) -->
+    <div id="comp-reopen-tab" onclick="toggleCompliancePanel()" title="Open Compliance Panel"
+      style="display:none;flex-shrink:0;width:26px;background:#13161f;border-left:1px solid #1e2130;cursor:pointer;display:none;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:10px 0;transition:background 0.15s;"
+      onmouseover="this.style.background='#1a2240'" onmouseout="this.style.background='#13161f'">
+      <span style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#4a6aaa;white-space:nowrap;user-select:none;">&#9878; Compliance</span>
+    </div>
 
   </div><!-- /ph-content-split -->
 </div><!-- /health-page -->
@@ -1032,6 +1045,14 @@ input[type=date]:focus { border-color: #4a90d9; }
       <option value="pot_room">Pot Room</option>
       <option value="zone">Zone</option>
       <option value="pot_id">Pot</option>
+    </select>
+    <span style="width:1px;height:18px;background:#1e2130;flex-shrink:0;"></span>
+    <span style="font-size:0.64rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#5a6284;">Sort By:</span>
+    <select id="c4-global-sort" onchange="c4GlobalSortChange()" style="width:auto;padding:3px 8px;font-size:0.78rem;background:#1a1d2e;border:1px solid #2a2d3e;color:#e0e0e0;border-radius:5px;cursor:pointer;">
+      <option value="compliance">Compliance</option>
+      <option value="notRequired">ALF&#8323; Not Required</option>
+      <option value="nonCompliance">Non-Compliance</option>
+      <option value="total">Total Records</option>
     </select>
     <span style="width:1px;height:18px;background:#1e2130;flex-shrink:0;"></span>
     <div id="c4-breadcrumb" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;flex:1;min-width:0;font-size:0.76rem;"></div>
@@ -1711,9 +1732,32 @@ function cascadeChartZones() {
   if(room) f=f.filter(r=>String(r.pot_room)===String(room));
   const sel=document.getElementById('sel-zone'),cur=sel.value;
   sel.innerHTML='<option value="">All Zones</option>';
-  uniq(f.map(r=>r.zone)).forEach(v=>{ const o=document.createElement('option'); o.value=v; o.text='Zone '+v; if(String(v)===String(cur))o.selected=true; sel.appendChild(o); });
-  if(cur && !uniq(f.map(r=>r.zone)).map(String).includes(String(cur))) sel.value='';
+  // Build unique zone+line+room combos to detect ambiguity
+  const combos=[...new Map(f.map(r=>[String(r.zone)+'||'+String(r.pot_line)+'||'+String(r.pot_room),{zone:r.zone,line:r.pot_line,room:r.pot_room}])).values()];
+  combos.sort((a,b)=>String(a.zone).localeCompare(String(b.zone),undefined,{numeric:true})||String(a.line).localeCompare(String(b.line),undefined,{numeric:true})||String(a.room).localeCompare(String(b.room),undefined,{numeric:true}));
+  // Count how many distinct (line,room) pairs exist per zone number
+  const zoneCount={};
+  combos.forEach(c=>{ zoneCount[String(c.zone)]=(zoneCount[String(c.zone)]||0)+1; });
+  combos.forEach(c=>{
+    const o=document.createElement('option');
+    const isAmbig=zoneCount[String(c.zone)]>1;
+    // composite value encodes zone+line+room when ambiguous, plain zone otherwise
+    o.value=isAmbig?String(c.zone)+'||'+String(c.line)+'||'+String(c.room):String(c.zone);
+    o.text=isAmbig?'Zone '+c.zone+' (Line '+c.line+' / Room '+c.room+')':'Zone '+c.zone;
+    if(o.value===String(cur))o.selected=true;
+    sel.appendChild(o);
+  });
+  if(cur&&!combos.some(c=>{ const isA=zoneCount[String(c.zone)]>1; const v=isA?String(c.zone)+'||'+String(c.line)+'||'+String(c.room):String(c.zone); return v===String(cur); })) sel.value='';
   populatePotIds();
+}
+// Helper: parse zone dropdown value and return filter function
+function zoneFilterFn(zoneVal){
+  if(!zoneVal) return ()=>true;
+  if(zoneVal.includes('||')){
+    const [z,l,rm]=zoneVal.split('||');
+    return r=>String(r.zone)===z&&String(r.pot_line)===l&&String(r.pot_room)===rm;
+  }
+  return r=>String(r.zone)===String(zoneVal);
 }
 function onFilterChange(event){
   const changed=event&&event.target?event.target.id:'';
@@ -1729,7 +1773,7 @@ function populatePotIds() {
   let f=ALL_DATA;
   if(line) f=f.filter(r=>String(r.pot_line)===String(line));
   if(room) f=f.filter(r=>String(r.pot_room)===String(room));
-  if(zone) f=f.filter(r=>String(r.zone)===String(zone));
+  if(zone) f=f.filter(zoneFilterFn(zone));
   const pids=[...new Set(f.map(r=>r.pot_id))].sort();
   const sel=document.getElementById('sel-potid'),cur=sel.value;
   sel.innerHTML='<option value="">All Pots</option>';
@@ -1892,10 +1936,11 @@ function getFilteredData() {
   const pid=document.getElementById('sel-potid').value;
   const dfrom=document.getElementById('date-from').value;
   const dto=document.getElementById('date-to').value;
+  const zoneFn=zoneFilterFn(zone);
   return ALL_DATA.filter(r=>{
     if(line&&String(r.pot_line)!==String(line)) return false;
     if(room&&String(r.pot_room)!==String(room)) return false;
-    if(zone&&String(r.zone)!==String(zone)) return false;
+    if(zone&&!zoneFn(r)) return false;
     if(pid&&r.pot_id!==pid) return false;
     if(dfrom&&r.date<dfrom) return false;
     if(dto&&r.date>dto) return false;
@@ -2257,13 +2302,20 @@ function cascadePhZones() {
   if (room) f = f.filter(r => String(r.pot_room) === String(room));
   const sel = document.getElementById('ph-sel-zone'), cur = sel.value;
   sel.innerHTML = '<option value="">All Zones</option>';
-  uniq(f.map(r => r.zone)).forEach(v => {
+  // Build unique zone+line+room combos to detect ambiguity
+  const combos = [...new Map(f.map(r => [String(r.zone)+'||'+String(r.pot_line)+'||'+String(r.pot_room), {zone:r.zone,line:r.pot_line,room:r.pot_room}])).values()];
+  combos.sort((a,b)=>String(a.zone).localeCompare(String(b.zone),undefined,{numeric:true})||String(a.line).localeCompare(String(b.line),undefined,{numeric:true})||String(a.room).localeCompare(String(b.room),undefined,{numeric:true}));
+  const zoneCount = {};
+  combos.forEach(c => { zoneCount[String(c.zone)] = (zoneCount[String(c.zone)] || 0) + 1; });
+  combos.forEach(c => {
     const o = document.createElement('option');
-    o.value = v; o.text = 'Zone ' + v;
-    if (String(v) === String(cur)) o.selected = true;
+    const isAmbig = zoneCount[String(c.zone)] > 1;
+    o.value = isAmbig ? String(c.zone)+'||'+String(c.line)+'||'+String(c.room) : String(c.zone);
+    o.text  = isAmbig ? 'Zone '+c.zone+' (Line '+c.line+' / Room '+c.room+')' : 'Zone '+c.zone;
+    if (o.value === String(cur)) o.selected = true;
     sel.appendChild(o);
   });
-  if (cur && !uniq(f.map(r => r.zone)).map(String).includes(String(cur))) sel.value = '';
+  if (cur && !combos.some(c => { const isA=zoneCount[String(c.zone)]>1; const v=isA?String(c.zone)+'||'+String(c.line)+'||'+String(c.room):String(c.zone); return v===String(cur); })) sel.value = '';
   populatePhPotIds();
 }
 
@@ -2282,7 +2334,7 @@ function populatePhPotIds() {
   let f = ALL_DATA;
   if (line) f = f.filter(r => String(r.pot_line) === String(line));
   if (room) f = f.filter(r => String(r.pot_room) === String(room));
-  if (zone) f = f.filter(r => String(r.zone)     === String(zone));
+  if (zone) f = f.filter(zoneFilterFn(zone));
   const pids = [...new Set(f.map(r => r.pot_id))].sort();
   const sel  = document.getElementById('ph-sel-potid'), cur = sel.value;
   sel.innerHTML = '<option value="">All Pots</option>';
@@ -2301,10 +2353,11 @@ function getPhFilteredData() {
   const pid   = document.getElementById('ph-sel-potid').value;
   const dfrom = document.getElementById('ph-date-from').value;
   const dto   = document.getElementById('ph-date-to').value;
+  const zoneFn = zoneFilterFn(zone);
   return ALL_DATA.filter(r => {
     if (line && String(r.pot_line) !== String(line)) return false;
     if (room && String(r.pot_room) !== String(room)) return false;
-    if (zone && String(r.zone)     !== String(zone)) return false;
+    if (zone && !zoneFn(r))                          return false;
     if (pid  && r.pot_id !== pid)                    return false;
     if (dfrom && r.date < dfrom)                     return false;
     if (dto   && r.date > dto)                       return false;
@@ -3194,8 +3247,18 @@ function renderCompliancePanel() {
   const zone = document.getElementById('ph-sel-zone').value;
   const room = document.getElementById('ph-sel-potroom').value;
   const line = document.getElementById('ph-sel-potline').value;
+  // Resolve readable zone label (composite value like "01||02_03||07" → "Zone 01 (Line 02_03 / Room 07)")
+  let zoneLabel = '';
+  if (zone) {
+    if (zone.includes('||')) {
+      const [z,l,rm] = zone.split('||');
+      zoneLabel = 'Zone ' + z + ' (Line ' + l + ' / Room ' + rm + ')';
+    } else {
+      zoneLabel = 'Zone ' + zone;
+    }
+  }
   const scope = pid   ? 'Pot ' + pid :
-                zone  ? 'Zone ' + zone :
+                zoneLabel ? zoneLabel :
                 room  ? 'Room ' + room :
                 line  ? 'Line ' + line : 'All';
   document.getElementById('comp-subtitle').textContent =
@@ -3206,7 +3269,39 @@ function renderCompliancePanel() {
   renderComplianceTrend(filteredData, consKey, corrKey);
 }
 
-// ── Wrap renderPotHealth to also trigger compliance (additive) ────
+// ── Compliance Panel Toggle ────────────────────────────────────────
+let compPanelOpen = true; // default open
+
+function toggleCompliancePanel() {
+  compPanelOpen = !compPanelOpen;
+  const panel     = document.getElementById('ph-compliance-panel');
+  const divider   = document.getElementById('ph-resize-divider');
+  const phMain    = document.querySelector('.ph-main');
+  const reopenTab = document.getElementById('comp-reopen-tab');
+
+  if (compPanelOpen) {
+    // Restore compliance panel
+    panel.style.display   = '';
+    if (divider) divider.style.display = '';
+    if (phMain)  { phMain.style.width = ''; phMain.style.flex = ''; }
+    if (reopenTab) reopenTab.style.display = 'none';
+  } else {
+    // Hide panel and divider, show reopen tab, let ph-main fill width
+    panel.style.display   = 'none';
+    if (divider) divider.style.display = 'none';
+    if (phMain)  { phMain.style.width = '100%'; phMain.style.flex = '1'; }
+    if (reopenTab) { reopenTab.style.display = 'flex'; }
+  }
+
+  // Reflow Plotly charts after layout change
+  setTimeout(function() {
+    try { Plotly.Plots.resize('ph-plot'); } catch(e) {}
+    try { Plotly.Plots.resize('comp-donut-plot'); } catch(e) {}
+    try { Plotly.Plots.resize('comp-trend-plot'); } catch(e) {}
+  }, 80);
+}
+
+
 // Uses function-reassignment pattern — zero changes to existing code.
 (function _patchRenderPotHealth() {
   const _orig = renderPotHealth;
@@ -3311,9 +3406,20 @@ function renderCompliancePanel() {
 /* ── State ── */
 const C4 = {
   stack:      [],   // breadcrumb stack: [{level, value, label}]
-  sortCol:    null,
+  sortCol:    null, // column-header sort (per-table, resets on drilldown)
   sortDir:    1,    // 1=asc, -1=desc
 };
+
+// ── Global sort: always descending by the selected field ─────────
+function c4GetGlobalSort() {
+  const el = document.getElementById('c4-global-sort');
+  return el ? el.value : 'compliance';
+}
+
+function c4GlobalSortChange() {
+  C4.sortCol = null; // reset column-header sort when global sort changes
+  c4Render();
+}
 
 // Hierarchy level order and field names
 const C4_LEVELS = ['pot_line','pot_room','zone','pot_id'];
@@ -3346,7 +3452,13 @@ function c4Count(rows, consKey, corrKey) {
 function c4FilteredData() {
   let data = ALL_DATA;
   for (const crumb of C4.stack) {
-    data = data.filter(r => String(r[crumb.level]) === String(crumb.value));
+    if (crumb.level === 'zone' && crumb.value.includes('||')) {
+      // Composite zone key: zone||line||room
+      const [z, l, rm] = crumb.value.split('||');
+      data = data.filter(r => String(r.zone) === z && String(r.pot_line) === l && String(r.pot_room) === rm);
+    } else {
+      data = data.filter(r => String(r[crumb.level]) === String(crumb.value));
+    }
   }
   return data;
 }
@@ -3412,33 +3524,91 @@ function c4Render() {
 // ── Render a hierarchy level as a sorted table ────────────────────
 function c4RenderLevel(level, consKey, corrKey) {
   const data = c4FilteredData();
-  // Group by level value
+  // Group by level value — for zone level, use composite key to disambiguate
   const groups = {};
   for (const r of data) {
-    const key = String(r[level] ?? 'N/A');
+    let key;
+    if (level === 'zone') {
+      // Check if zone is ambiguous across line+room combos in full dataset scope
+      key = String(r.zone) + '||' + String(r.pot_line) + '||' + String(r.pot_room);
+    } else {
+      key = String(r[level] ?? 'N/A');
+    }
     if (!groups[key]) groups[key] = [];
     groups[key].push(r);
   }
 
-  // Build summary rows
-  let rows = Object.entries(groups).map(([val, rws]) => ({
-    value: val,
-    total: rws.length,
-    compliance: c4Count(rws, consKey, corrKey),
-  }));
+  // Determine if any zone key shares the same zone number (ambiguity)
+  let zoneAmbig = false;
+  if (level === 'zone') {
+    const zoneNums = new Set(Object.keys(groups).map(k => k.split('||')[0]));
+    const zoneInMultiple = {};
+    Object.keys(groups).forEach(k => {
+      const z = k.split('||')[0];
+      zoneInMultiple[z] = (zoneInMultiple[z] || 0) + 1;
+    });
+    zoneAmbig = Object.values(zoneInMultiple).some(v => v > 1);
+  }
 
-  // Sort
-  const col = C4.sortCol || 'compliance';
-  const dir = C4.sortDir || -1; // default desc by compliance
-  rows.sort((a, b) => {
-    let av = a[col], bv = b[col];
-    if (col === 'value') { av = String(av); bv = String(bv); return dir * av.localeCompare(bv, undefined, {numeric:true}); }
-    return dir * (av - bv);
+  // Build summary rows with full compliance breakdown
+  let rows = Object.entries(groups).map(([key, rws]) => {
+    let total = rws.length, compliance = 0, notRequired = 0, nonCompliance = 0;
+    for (const r of rws) {
+      const { cons, corr } = c4NormRow(r, consKey, corrKey);
+      const EPS = 1e-9;
+      const bothZero = Math.abs(cons) < EPS && Math.abs(corr) < EPS;
+      const diffZero  = Math.abs(cons - corr) < EPS;
+      if (bothZero) notRequired++;
+      else if (diffZero) compliance++;
+      else nonCompliance++;
+    }
+    // Build display label
+    let displayVal;
+    if (level === 'zone') {
+      const parts = key.split('||');
+      const z = parts[0], l = parts[1], rm = parts[2];
+      // Count how many groups share this zone number
+      const zoneGroupCount = Object.keys(groups).filter(k => k.split('||')[0] === z).length;
+      displayVal = zoneGroupCount > 1
+        ? 'Zone ' + z + ' (Line ' + l + ' / Room ' + rm + ')'
+        : 'Zone ' + z;
+    } else {
+      displayVal = key;
+    }
+    return { value: key, displayVal, total, compliance, notRequired, nonCompliance };
   });
 
-  // Show heatmap at zone or pot_id level
+  // Effective sort: column-header click overrides global sort dropdown
+  const globalSort = c4GetGlobalSort();
+  const col = C4.sortCol || globalSort;
+  const dir = C4.sortCol ? C4.sortDir : -1; // global sort always descending
+  rows.sort((a, b) => {
+    if (col === 'value') {
+      const av = String(a.displayVal), bv = String(b.displayVal);
+      return dir * av.localeCompare(bv, undefined, {numeric:true});
+    }
+    return dir * (a[col] - b[col]);
+  });
+
+  // Bar reflects the active sort field
+  const barCol = (col === 'value' || col === 'total') ? 'compliance' : col;
+  const maxBarVal = rows.length ? Math.max(...rows.map(r => r[barCol]), 1) : 1;
+
+  // Bar color scheme per column type
+  function barColorFn(pct, colName) {
+    if (colName === 'nonCompliance') return pct >= 75 ? '#e04444' : pct >= 40 ? '#d4a830' : '#7a3030';
+    if (colName === 'notRequired')   return pct >= 75 ? '#8ab0d8' : pct >= 40 ? '#5a7aaa' : '#3a4a7a';
+    return pct >= 75 ? '#5cb85c' : pct >= 40 ? '#d4a830' : '#e04444';
+  }
+  function barLabelColor(colName) {
+    if (colName === 'nonCompliance') return '#e04444';
+    if (colName === 'notRequired')   return '#8ab0d8';
+    return '#5cb85c';
+  }
+
+  // Show heatmap at zone or pot_id level — pass the active sort field
   const isZoneOrPot = (level === 'zone' || level === 'pot_id');
-  const maxComp = rows.length ? Math.max(...rows.map(r => r.compliance), 1) : 1;
+  const maxHeatVal = rows.length ? Math.max(...rows.map(r => r[barCol]), 1) : 1;
 
   // Update badge
   const totalComp = rows.reduce((s, r) => s + r.compliance, 0);
@@ -3449,33 +3619,43 @@ function c4RenderLevel(level, consKey, corrKey) {
   let html = '';
 
   // Heatmap section (only for zone → pot_id level)
+  // Build heatmap-friendly rows — keep raw .value for drilldown, add .displayVal for labels
+  const heatRows = rows.map(r => Object.assign({}, r));
   if (isZoneOrPot && rows.length > 0) {
-    html += c4BuildHeatmap(rows, maxComp, level);
+    html += c4BuildHeatmap(heatRows, maxHeatVal, level, barCol);
   }
 
   // Table section
   const levelLabel = C4_LABELS[level] || level;
-  html += `<div class="c4-section-hdr">${levelLabel} — Compliance Count (double-click to drill down)</div>`;
+  html += `<div class="c4-section-hdr">${levelLabel} — Compliance Summary (double-click to drill down)</div>`;
   html += `<div class="c4-table-wrap"><table class="c4-table">
     <thead><tr>
       <th onclick="c4SortBy('value')">${levelLabel} ${c4SortIcon('value')}</th>
       <th onclick="c4SortBy('total')">Total Records ${c4SortIcon('total')}</th>
-      <th onclick="c4SortBy('compliance')">Compliance Count ${c4SortIcon('compliance')}</th>
-      <th>Compliance Bar</th>
+      <th onclick="c4SortBy('compliance')">Compliance ${c4SortIcon('compliance')}</th>
+      <th onclick="c4SortBy('notRequired')" style="color:#8ab0d8">ALF&#8323; Not Required ${c4SortIcon('notRequired')}</th>
+      <th onclick="c4SortBy('nonCompliance')" style="color:#e04444">Non-Compliance ${c4SortIcon('nonCompliance')}</th>
+      <th>Bar (sorted by: ${col === 'value' ? levelLabel : col === 'total' ? 'Total' : col === 'notRequired' ? 'Not Required' : col === 'nonCompliance' ? 'Non-Compliance' : 'Compliance'})</th>
     </tr></thead>
     <tbody>`;
 
   for (const row of rows) {
-    const pct = maxComp > 0 ? Math.round(row.compliance / maxComp * 100) : 0;
-    const barColor = pct >= 75 ? '#5cb85c' : pct >= 40 ? '#d4a830' : '#e04444';
-    html += `<tr ondblclick="c4DrillDown('${escAttr(level)}','${escAttr(row.value)}')">
-      <td class="c4-name-cell">${escHtml(row.value)}</td>
+    const barVal = row[barCol];
+    const pct = maxBarVal > 0 ? Math.round(barVal / maxBarVal * 100) : 0;
+    const barColor = barColorFn(pct, barCol);
+    const barLblClr = barLabelColor(barCol);
+    // For drilldown we pass the raw key; for zone we encode it as composite so c4DrillDown can filter correctly
+    const drillVal = escAttr(row.value);
+    html += `<tr ondblclick="c4DrillDown('${escAttr(level)}','${drillVal}')">
+      <td class="c4-name-cell">${escHtml(row.displayVal)}</td>
       <td>${row.total.toLocaleString()}</td>
       <td><span style="color:#5cb85c;font-weight:700">${row.compliance.toLocaleString()}</span></td>
+      <td><span style="color:#8ab0d8;font-weight:700">${row.notRequired.toLocaleString()}</span></td>
+      <td><span style="color:#e04444;font-weight:700">${row.nonCompliance.toLocaleString()}</span></td>
       <td class="c4-count-bar-cell">
         <div class="c4-bar-wrap">
           <div class="c4-bar-bg"><div class="c4-bar-fill" style="width:${pct}%;background:${barColor}"></div></div>
-          <span class="c4-count-val" style="color:${barColor}">${row.compliance}</span>
+          <span class="c4-count-val" style="color:${barLblClr}">${barVal}</span>
         </div>
       </td>
     </tr>`;
@@ -3485,26 +3665,49 @@ function c4RenderLevel(level, consKey, corrKey) {
   content.innerHTML = html;
 }
 
-// ── Heatmap builder (rows × 1 column grid per row at zone/pot level) ──
-function c4BuildHeatmap(rows, maxComp, level) {
-  // Build a simple grid: each row is a group, columns are not used here
-  // We do a compact heatmap where each cell = one group colored by compliance ratio
-  const COLS = Math.ceil(Math.sqrt(rows.length)) || 1;
+// ── Heatmap builder — colored and labeled by active sort field ──
+function c4BuildHeatmap(rows, maxVal, level, sortField) {
+  sortField = sortField || 'compliance';
   const levelLabel = C4_LABELS[level] || level;
-  let html = `<div class="c4-heatmap-title">&#x1F4CA; ${levelLabel} Heatmap — Green = High Compliance, Red = Low</div>
+
+  // Heatmap title changes with sort field
+  const heatLabels = {
+    compliance:    'Green = High Compliance, Red = Low',
+    notRequired:   'Blue = High ALF₃ Not Required, Red = Low',
+    nonCompliance: 'Red = High Non-Compliance, Green = Low',
+    total:         'Green = Most Records, Red = Fewest',
+  };
+  const titleSuffix = heatLabels[sortField] || heatLabels.compliance;
+
+  let html = `<div class="c4-heatmap-title">&#x1F4CA; ${levelLabel} Heatmap — ${titleSuffix}</div>
     <div class="c4-heatmap-wrap"><div class="c4-heatmap">`;
 
   let rowHtml = '<div class="c4-heatmap-row" style="flex-wrap:wrap;gap:4px;">';
-  rows.forEach((r, i) => {
-    const ratio = maxComp > 0 ? r.compliance / maxComp : 0;
-    // Green (#5cb85c) → Yellow (#d4a830) → Red (#e04444)
-    const color = c4HeatColor(ratio);
-    const shortLabel = r.value.length > 8 ? r.value.slice(0, 8) + '…' : r.value;
+  rows.forEach((r) => {
+    const val = r[sortField] !== undefined ? r[sortField] : r.compliance;
+    const ratio = maxVal > 0 ? val / maxVal : 0;
+
+    // Color logic depends on sort field
+    let color;
+    if (sortField === 'nonCompliance') {
+      // High non-compliance = red (bad), low = green
+      color = c4HeatColorInverse(ratio);
+    } else if (sortField === 'notRequired') {
+      // Blue scale: high = bright blue, low = dark
+      color = `hsl(210,${Math.round(40 + 40 * ratio)}%,${Math.round(18 + 20 * ratio)}%)`;
+    } else {
+      // compliance / total: green = high, red = low
+      color = c4HeatColor(ratio);
+    }
+
+    const displayLabel = r.displayVal ?? r.value;
+    const shortLabel = displayLabel.length > 12 ? displayLabel.slice(0, 12) + '…' : displayLabel;
+    const tooltip = `${displayLabel}: ${val} ${sortField === 'notRequired' ? 'not required' : sortField === 'nonCompliance' ? 'non-compliant' : sortField === 'total' ? 'total' : 'compliant'} / ${r.total} total`;
     rowHtml += `<div class="c4-hm-cell" style="background:${color};color:rgba(255,255,255,0.85);min-width:42px;max-width:60px;width:auto;padding:2px 4px;font-size:0.62rem;border-radius:5px;height:auto;min-height:28px;flex-direction:column;justify-content:center;align-items:center;"
-      title="${escAttr(r.value)}: ${r.compliance} compliant / ${r.total} total"
+      title="${escAttr(tooltip)}"
       ondblclick="c4DrillDown('${escAttr(level)}','${escAttr(r.value)}')"
     ><span style="font-size:0.65rem;font-weight:700;max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(shortLabel)}</span>
-    <span style="font-size:0.7rem;font-weight:700;margin-top:1px">${r.compliance}</span></div>`;
+    <span style="font-size:0.7rem;font-weight:700;margin-top:1px">${val}</span></div>`;
   });
   rowHtml += '</div>';
   html += rowHtml + '</div></div><br>';
@@ -3513,15 +3716,24 @@ function c4BuildHeatmap(rows, maxComp, level) {
 
 function c4HeatColor(ratio) {
   if (ratio >= 0.75) {
-    // High: green shades
     const t = (ratio - 0.75) / 0.25;
     return `hsl(${Math.round(120 * t + 100 * (1-t))},60%,${Math.round(28 + 8*t)}%)`;
   } else if (ratio >= 0.4) {
-    // Mid: yellow/amber
     return 'hsl(42,70%,30%)';
   } else {
-    // Low: red
     return `hsl(${Math.round(0 + 10 * ratio)},65%,${Math.round(22 + 5*ratio*2)}%)`;
+  }
+}
+
+// Inverse: high ratio = red (bad), low ratio = green (good) — for non-compliance
+function c4HeatColorInverse(ratio) {
+  if (ratio >= 0.75) {
+    return `hsl(${Math.round(0 + 10*(1-ratio))},65%,${Math.round(22 + 10*ratio)}%)`;
+  } else if (ratio >= 0.4) {
+    return 'hsl(42,70%,30%)';
+  } else {
+    const t = ratio / 0.4;
+    return `hsl(${Math.round(120 * (1-t) + 100*t)},60%,${Math.round(24 + 6*(1-t))}%)`;
   }
 }
 
@@ -3529,32 +3741,50 @@ function c4HeatColor(ratio) {
 function c4RenderMonths() {
   const { consKey, corrKey } = findComplianceKeys();
   const data = c4FilteredData();
+  const globalSort = c4GetGlobalSort();
 
-  // Group by YYYY-MM
+  // Group by YYYY-MM and compute all four counts per month
   const monthMap = {};
   for (const r of data) {
     if (!r.date) continue;
     const ym = r.date.slice(0, 7);
-    if (!monthMap[ym]) monthMap[ym] = [];
-    monthMap[ym].push(r);
+    if (!monthMap[ym]) monthMap[ym] = { rows: [], compliance: 0, notRequired: 0, nonCompliance: 0, total: 0 };
+    monthMap[ym].rows.push(r);
+    monthMap[ym].total++;
+    const { cons, corr } = c4NormRow(r, consKey, corrKey);
+    const EPS = 1e-9;
+    const bothZero = Math.abs(cons) < EPS && Math.abs(corr) < EPS;
+    const diffZero  = Math.abs(cons - corr) < EPS;
+    if (bothZero) monthMap[ym].notRequired++;
+    else if (diffZero) monthMap[ym].compliance++;
+    else monthMap[ym].nonCompliance++;
   }
 
   const months = Object.keys(monthMap).sort();
   document.getElementById('c4-scope-badge').textContent = months.length + ' months';
 
-  let html = '<div class="c4-section-hdr">Monthly Compliance (double-click to see daily detail)</div>';
+  // Labels/colors per sort field for the month card
+  const fieldLabels = {
+    compliance:    { label: 'compliant days',    color: '#5cb85c' },
+    notRequired:   { label: 'not required days', color: '#8ab0d8' },
+    nonCompliance: { label: 'non-compliant days',color: '#e04444' },
+    total:         { label: 'total records',     color: '#7eb8f7' },
+  };
+  const fl = fieldLabels[globalSort] || fieldLabels.compliance;
+
+  let html = `<div class="c4-section-hdr">Monthly — ${fl.label.charAt(0).toUpperCase() + fl.label.slice(1)} (double-click to see daily detail)</div>`;
   html += '<div class="c4-month-grid">';
 
   for (const ym of months) {
-    const rws = monthMap[ym];
-    const comp = c4Count(rws, consKey, corrKey);
-    const total = rws.length;
+    const mData = monthMap[ym];
+    const count = mData[globalSort] !== undefined ? mData[globalSort] : mData.compliance;
+    const total = mData.total;
     const [yr, mo] = ym.split('-');
     const mLabel = new Date(+yr, +mo - 1).toLocaleString('en', {month:'short'}) + ' ' + yr;
     html += `<div class="c4-month-card" ondblclick="c4DrillMonth('${escAttr(ym)}')">
       <div class="c4-month-name">${escHtml(mLabel)}</div>
-      <div class="c4-month-stat"><span class="c4-month-ok">${comp}</span> / ${total}</div>
-      <div class="c4-month-stat" style="font-size:0.67rem;color:#3a4060;margin-top:2px">compliant days</div>
+      <div class="c4-month-stat"><span style="color:${fl.color};font-weight:700">${count}</span> / ${total}</div>
+      <div class="c4-month-stat" style="font-size:0.67rem;color:#3a4060;margin-top:2px">${fl.label}</div>
     </div>`;
   }
 
@@ -3588,8 +3818,22 @@ function c4DrillMonth(ym) {
   for (const r of data) {
     const { cons, corr } = c4NormRow(r, consKey, corrKey);
     const diff = cons - corr;
-    const followed = c4IsFollowed(cons, corr);
     const EPS = 1e-9;
+    const bothZero = Math.abs(cons) < EPS && Math.abs(corr) < EPS;
+    const diffZero  = Math.abs(cons - corr) < EPS;
+
+    let followedLabel, followedClass;
+    if (bothZero) {
+      followedLabel = '&#8212; Not Required';
+      followedClass = 'style="color:#8ab0d8;font-weight:700;font-size:0.85rem"';
+    } else if (diffZero) {
+      followedLabel = '&#10003; Yes';
+      followedClass = 'class="c4-followed-yes"';
+    } else {
+      followedLabel = '&#10007; No';
+      followedClass = 'class="c4-followed-no"';
+    }
+
     const diffClass = Math.abs(diff) < EPS ? 'c4-diff-zero' : (diff > 0 ? 'c4-diff-pos' : 'c4-diff-neg');
     const diffStr = Math.abs(diff) < EPS ? '0' : (diff > 0 ? '+' : '') + diff.toFixed(4);
     const consDisplay = (cons === 0 && r[consKey] === null) ? '<span style="color:#4a5474;font-style:italic">null→0</span>' : cons.toLocaleString();
@@ -3599,7 +3843,7 @@ function c4DrillMonth(ym) {
       <td class="c4-daily-val">${consDisplay}</td>
       <td class="c4-daily-val">${corrDisplay}</td>
       <td class="${diffClass}">${diffStr}</td>
-      <td class="${followed ? 'c4-followed-yes' : 'c4-followed-no'}">${followed ? '&#10003; Yes' : '&#10007; No'}</td>
+      <td ${followedClass}>${followedLabel}</td>
     </tr>`;
   }
 
@@ -3609,8 +3853,16 @@ function c4DrillMonth(ym) {
 
 // ── Drilldown: push to stack and re-render ─────────────────────────
 function c4DrillDown(level, value) {
-  C4.stack.push({ level, value, label: C4_LABELS[level] + ': ' + value });
-  C4.sortCol = null;
+  // Build a readable label — for composite zone values like "01||02_03||07"
+  let label;
+  if (level === 'zone' && value.includes('||')) {
+    const [z, l, rm] = value.split('||');
+    label = 'Zone ' + z + ' (Line ' + l + ' / Room ' + rm + ')';
+  } else {
+    label = C4_LABELS[level] + ': ' + value;
+  }
+  C4.stack.push({ level, value, label });
+  C4.sortCol = null; // reset per-table column sort, global sort dropdown stays
   c4Render();
 }
 
@@ -3631,7 +3883,7 @@ function c4UpdateBreadcrumb() {
     const isLast = (i === C4.stack.length - 1);
     html += `<span class="c4-crumb-sep">&#9656;</span>
       <span class="c4-crumb ${isLast ? 'c4-crumb-active' : ''}" onclick="c4GoBack(${i + 1})">
-        ${escHtml(crumb.value)}
+        ${escHtml(crumb.label)}
       </span>`;
   });
   bc.innerHTML = html;
