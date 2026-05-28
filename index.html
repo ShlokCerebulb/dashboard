@@ -631,6 +631,44 @@ input[type=date]:focus { border-color: #4a90d9; }
   opacity: 0.5;
 }
 
+/* ═══════════════════════════════════════════════════
+   POT SEARCH — autocomplete in all sections
+═══════════════════════════════════════════════════ */
+.pot-search-wrap { position: relative; }
+.pot-search-input {
+  width: 100%; box-sizing: border-box;
+  background: #1a1d2e; border: 1px solid #2a2d3e;
+  color: #e0e0e0; padding: 5px 26px 5px 9px;
+  border-radius: 6px; font-size: 0.8rem; outline: none;
+}
+.pot-search-input:focus { border-color: #4a90d9; background: #1e2238; }
+.pot-search-input::placeholder { color: #4a5474; }
+.pot-search-clear-btn {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; color: #4a5474;
+  cursor: pointer; font-size: 0.82rem; padding: 0; line-height: 1; display: none;
+}
+.pot-search-clear-btn.visible { display: block; }
+.pot-search-clear-btn:hover { color: #e07070; }
+.pot-suggestions-list {
+  position: absolute; top: calc(100% + 3px); left: 0; right: 0;
+  background: #161a28; border: 1px solid #3a6aaa;
+  border-radius: 6px; z-index: 9999; max-height: 200px; overflow-y: auto;
+  display: none; box-shadow: 0 6px 22px rgba(0,0,0,0.6); margin-top: 1px;
+}
+.pot-suggestions-list.open { display: block; }
+.pot-sugg-item {
+  padding: 6px 11px; font-size: 0.8rem; color: #c0c8e0;
+  cursor: pointer; border-bottom: 1px solid #1e2238;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pot-sugg-item:last-child { border-bottom: none; }
+.pot-sugg-item:hover, .pot-sugg-item.psi-hl { background: #243050; color: #7eb8f7; }
+.pot-sugg-item b { color: #90c8ff; font-weight: 700; }
+.pot-sugg-no-result { padding: 8px 11px; font-size: 0.77rem; color: #4a5474; font-style: italic; }
+/* compact variant for compliance4 topbar */
+.pot-search-input.compact { font-size: 0.75rem; padding: 3px 24px 3px 8px; }
+
 </style>
 </head>
 <body>
@@ -755,6 +793,17 @@ input[type=date]:focus { border-color: #4a90d9; }
           <select id="sel-potroom" onchange="onFilterChange(event)"><option value="">All Rooms</option></select></div>
         <div class="filter-group"><label class="filter-label">Zone</label>
           <select id="sel-zone" onchange="onFilterChange(event)"><option value="">All Zones</option></select></div>
+        <div class="filter-group">
+          <label class="filter-label">Search Pot</label>
+          <div class="pot-search-wrap">
+            <input type="text" class="pot-search-input" id="chart-pot-search"
+              placeholder="&#128269; Type pot ID…"
+              oninput="psInput(this,'chart')" onfocus="psFocus(this,'chart')"
+              onkeydown="psKeydown(event,'chart')" autocomplete="off">
+            <button class="pot-search-clear-btn" id="chart-pot-search-clear" onclick="psClear('chart')">&#10005;</button>
+            <div class="pot-suggestions-list" id="chart-pot-suggestions"></div>
+          </div>
+        </div>
         <div class="filter-group"><label class="filter-label">Pot ID</label>
           <select id="sel-potid" onchange="updateChart()"><option value="">All Pots</option></select></div>
       </div>
@@ -826,6 +875,17 @@ input[type=date]:focus { border-color: #4a90d9; }
       <div class="null-sec">
         <div class="null-sec-title">&#9660; Filters</div>
         <div class="filter-group">
+          <label class="filter-label">Search Pot</label>
+          <div class="pot-search-wrap">
+            <input type="text" class="pot-search-input" id="null-pot-search"
+              placeholder="&#128269; Type pot ID…"
+              oninput="psInput(this,'null')" onfocus="psFocus(this,'null')"
+              onkeydown="psKeydown(event,'null')" autocomplete="off">
+            <button class="pot-search-clear-btn" id="null-pot-search-clear" onclick="psClear('null')">&#10005;</button>
+            <div class="pot-suggestions-list" id="null-pot-suggestions"></div>
+          </div>
+        </div>
+        <div class="filter-group">
           <label class="filter-label">Pot ID</label>
           <select id="null-sel-pot" onchange="onNullFilterChange()"><option value="">All Pots</option></select>
         </div>
@@ -884,6 +944,17 @@ input[type=date]:focus { border-color: #4a90d9; }
             <select id="ph-sel-potroom" onchange="onPhFilterChange(event)"><option value="">All Rooms</option></select></div>
           <div class="filter-group"><label class="filter-label">Zone</label>
             <select id="ph-sel-zone" onchange="onPhFilterChange(event)"><option value="">All Zones</option></select></div>
+          <div class="filter-group">
+            <label class="filter-label">Search Pot</label>
+            <div class="pot-search-wrap">
+              <input type="text" class="pot-search-input" id="health-pot-search"
+                placeholder="&#128269; Type pot ID…"
+                oninput="psInput(this,'health')" onfocus="psFocus(this,'health')"
+                onkeydown="psKeydown(event,'health')" autocomplete="off">
+              <button class="pot-search-clear-btn" id="health-pot-search-clear" onclick="psClear('health')">&#10005;</button>
+              <div class="pot-suggestions-list" id="health-pot-suggestions"></div>
+            </div>
+          </div>
           <div class="filter-group"><label class="filter-label">Pot ID</label>
             <select id="ph-sel-potid" onchange="renderPotHealth()"><option value="">All Pots</option></select></div>
         </div>
@@ -1057,6 +1128,16 @@ input[type=date]:focus { border-color: #4a90d9; }
     <span style="width:1px;height:18px;background:#1e2130;flex-shrink:0;"></span>
     <div id="c4-breadcrumb" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;flex:1;min-width:0;font-size:0.76rem;"></div>
     <span id="c4-scope-badge" style="font-size:0.72rem;color:#5a6490;white-space:nowrap;flex-shrink:0;"></span>
+    <span style="width:1px;height:18px;background:#1e2130;flex-shrink:0;margin-left:4px;"></span>
+    <div style="position:relative;flex-shrink:0;">
+      <input type="text" class="pot-search-input compact" id="c4-pot-search"
+        style="width:150px;"
+        placeholder="&#128269; Search pot…"
+        oninput="psInput(this,'c4')" onfocus="psFocus(this,'c4')"
+        onkeydown="psKeydown(event,'c4')" autocomplete="off">
+      <button class="pot-search-clear-btn" id="c4-pot-search-clear" onclick="psClear('c4')">&#10005;</button>
+      <div class="pot-suggestions-list" id="c4-pot-suggestions" style="right:0;left:auto;width:180px;"></div>
+    </div>
   </div>
 
   <!-- Content area -->
@@ -2984,9 +3065,11 @@ function findComplianceKeys() {
  */
 function getComplianceCategory(row, consKey, corrKey) {
   const rv = row[consKey], kv = row[corrKey];
-  if (rv === null || rv === undefined || kv === null || kv === undefined) return null;
-  const c = Number(rv), k = Number(kv);
-  if (isNaN(c) || isNaN(k)) return null;
+  // Treat null/undefined as 0 — matches compliance4 panel (c4NormRow) behaviour
+  // so that Total = notRequired + compliance + nonCompliance (no skipped rows)
+  const c = (rv === null || rv === undefined) ? 0 : Number(rv);
+  const k = (kv === null || kv === undefined) ? 0 : Number(kv);
+  if (isNaN(c) || isNaN(k)) return null;   // only skip truly non-numeric strings
 
   const EPSILON = 1e-9;
   const bothZero = Math.abs(c) < EPSILON && Math.abs(k) < EPSILON;
@@ -3234,7 +3317,7 @@ function renderCompliancePanel() {
 
   // ── KPI Cards ──
   document.getElementById('comp-total').textContent          =
-    filteredData.length.toLocaleString();
+    summary.total.toLocaleString();
   document.getElementById('comp-not-required').textContent   =
     summary.notRequired.toLocaleString();
   document.getElementById('comp-compliance').textContent     =
@@ -3909,6 +3992,247 @@ function escHtml(s) {
 function escAttr(s) {
   return String(s).replace(/'/g,'&#39;').replace(/"/g,'&quot;');
 }
+
+// ════════════════════════════════════════════════════════════════════
+//   POT SEARCH — direct autocomplete in all 4 dashboard sections
+//   Section IDs: 'chart' | 'null' | 'health' | 'c4'
+// ════════════════════════════════════════════════════════════════════
+
+function psGetSuggestions(query) {
+  if (!ALL_DATA.length) return [];
+  const q = query.trim().toLowerCase();
+  const allPots = [...new Set(ALL_DATA.map(r => r.pot_id))].sort(
+    (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true })
+  );
+  if (!q) return allPots.slice(0, 30);
+  // starts-with first, then contains (deduped)
+  const starts   = allPots.filter(p => String(p).toLowerCase().startsWith(q));
+  const contains = allPots.filter(p => {
+    const s = String(p).toLowerCase();
+    return s.includes(q) && !s.startsWith(q);
+  });
+  return [...starts, ...contains].slice(0, 30);
+}
+
+function psRender(sectionId, query) {
+  const container = document.getElementById(sectionId + '-pot-suggestions');
+  if (!container) return;
+  const list = psGetSuggestions(query);
+  if (!list.length) {
+    container.innerHTML = '<div class="pot-sugg-no-result">No pots found</div>';
+  } else {
+    const q = query.trim().toLowerCase();
+    container.innerHTML = list.map(p => {
+      let display;
+      if (q) {
+        const raw = String(p), lower = raw.toLowerCase();
+        const idx = lower.indexOf(q);
+        display = idx >= 0
+          ? escHtml(raw.slice(0, idx)) + '<b>' + escHtml(raw.slice(idx, idx + q.length)) + '</b>' + escHtml(raw.slice(idx + q.length))
+          : escHtml(raw);
+      } else {
+        display = escHtml(String(p));
+      }
+      return '<div class="pot-sugg-item" onmousedown="psSelect(\'' +
+        escAttr(String(p)) + '\',\'' + sectionId + '\')">' + display + '</div>';
+    }).join('');
+  }
+  container.classList.add('open');
+}
+
+function psInput(input, sectionId) {
+  const btn = document.getElementById(sectionId + '-pot-search-clear');
+  if (btn) btn.classList.toggle('visible', !!input.value);
+  psRender(sectionId, input.value);
+}
+
+function psFocus(input, sectionId) {
+  psRender(sectionId, input.value);
+}
+
+function psKeydown(event, sectionId) {
+  const container = document.getElementById(sectionId + '-pot-suggestions');
+  if (!container || !container.classList.contains('open')) return;
+  const items = [...container.querySelectorAll('.pot-sugg-item')];
+  if (!items.length) return;
+  let hi = items.findIndex(el => el.classList.contains('psi-hl'));
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    if (hi >= 0) items[hi].classList.remove('psi-hl');
+    hi = (hi + 1) % items.length;
+    items[hi].classList.add('psi-hl');
+    items[hi].scrollIntoView({ block: 'nearest' });
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    if (hi >= 0) items[hi].classList.remove('psi-hl');
+    hi = (hi - 1 + items.length) % items.length;
+    items[hi].classList.add('psi-hl');
+    items[hi].scrollIntoView({ block: 'nearest' });
+  } else if (event.key === 'Enter') {
+    event.preventDefault();
+    const sel = hi >= 0 ? items[hi] : (items.length === 1 ? items[0] : null);
+    if (sel) sel.dispatchEvent(new MouseEvent('mousedown'));
+  } else if (event.key === 'Escape') {
+    psHide(sectionId);
+  }
+}
+
+// ── Helpers: get pot's line/room/zone, and find the right zone option value ──
+function psGetPotInfo(potId) {
+  const r = ALL_DATA.find(row => row.pot_id === potId);
+  if (!r) return null;
+  return {
+    pot_line: String(r.pot_line),
+    pot_room: String(r.pot_room),
+    zone:     String(r.zone)
+  };
+}
+
+// After cascade has rebuilt the zone dropdown, find the correct option value
+// for the given zone/line/room (handles composite zone||line||room values)
+function psFindZoneOptVal(selId, zone, line, room) {
+  const sel = document.getElementById(selId);
+  if (!sel) return zone;
+  for (const opt of sel.options) {
+    if (!opt.value) continue;
+    if (opt.value.includes('||')) {
+      const [z, l, rm] = opt.value.split('||');
+      if (z === zone && l === line && rm === room) return opt.value;
+    } else if (opt.value === zone) {
+      return opt.value;
+    }
+  }
+  return zone; // fallback
+}
+
+// ── Build full C4 drilldown stack for a searched pot ──────────────
+// Mirrors the label format used by c4DrillDown so breadcrumb looks identical
+// to manually drilling down through each level.
+function psC4BuildStack(potId) {
+  const row = ALL_DATA.find(r => r.pot_id === potId);
+  if (!row) return [{ level: 'pot_id', value: potId, label: 'Pot: ' + potId }];
+
+  const line = String(row.pot_line);
+  const room = String(row.pot_room);
+  const zone = String(row.zone);
+  const zoneVal = zone + '||' + line + '||' + room;   // always composite (matches c4DrillDown)
+  const zoneLabel = 'Zone ' + zone + ' (Line ' + line + ' / Room ' + room + ')';
+
+  // All four possible stack entries in hierarchy order
+  const allEntries = [
+    { level: 'pot_line', value: line,     label: C4_LABELS['pot_line'] + ': ' + line },
+    { level: 'pot_room', value: room,     label: C4_LABELS['pot_room'] + ': ' + room },
+    { level: 'zone',     value: zoneVal,  label: zoneLabel },
+    { level: 'pot_id',   value: potId,    label: 'Pot: ' + potId },
+  ];
+
+  // Start from whichever level the user has selected in the Start dropdown
+  const startLevel = (document.getElementById('c4-start-level') || {}).value || 'pot_line';
+  const startIdx   = C4_LEVELS.indexOf(startLevel);
+  return startIdx >= 0 ? allEntries.slice(startIdx) : allEntries;
+}
+
+function psSelect(potId, sectionId) {
+  const inp = document.getElementById(sectionId + '-pot-search');
+  if (inp) inp.value = potId;
+  const btn = document.getElementById(sectionId + '-pot-search-clear');
+  if (btn) btn.classList.add('visible');
+  psHide(sectionId);
+
+  if (sectionId === 'chart') {
+    const info = psGetPotInfo(potId);
+    if (info) {
+      // Set line → cascade rebuilds room/zone/pot dropdowns
+      document.getElementById('sel-potline').value = info.pot_line;
+      cascadeChartRooms();
+      // Set room → cascade rebuilds zone/pot dropdowns
+      document.getElementById('sel-potroom').value = info.pot_room;
+      cascadeChartZones();
+      // Set zone (may be composite value like zone||line||room)
+      const zv = psFindZoneOptVal('sel-zone', info.zone, info.pot_line, info.pot_room);
+      document.getElementById('sel-zone').value = zv;
+      populatePotIds();
+    }
+    const sel = document.getElementById('sel-potid');
+    if (sel) sel.value = potId;
+    updateChart();
+
+  } else if (sectionId === 'null') {
+    // Values Count has no line/room/zone — just set pot
+    const sel = document.getElementById('null-sel-pot');
+    if (sel) { sel.value = potId; onNullFilterChange(); }
+
+  } else if (sectionId === 'health') {
+    const info = psGetPotInfo(potId);
+    if (info) {
+      document.getElementById('ph-sel-potline').value = info.pot_line;
+      cascadePhRooms();
+      document.getElementById('ph-sel-potroom').value = info.pot_room;
+      cascadePhZones();
+      const zv = psFindZoneOptVal('ph-sel-zone', info.zone, info.pot_line, info.pot_room);
+      document.getElementById('ph-sel-zone').value = zv;
+      populatePhPotIds();
+    }
+    const sel = document.getElementById('ph-sel-potid');
+    if (sel) sel.value = potId;
+    renderPotHealth();
+
+  } else if (sectionId === 'c4') {
+    // Build full stack: startLevel → pot_line → pot_room → zone → pot_id
+    C4.stack = psC4BuildStack(potId);
+    C4.sortCol = null;
+    c4Render();
+  }
+}
+
+function psClear(sectionId) {
+  const inp = document.getElementById(sectionId + '-pot-search');
+  if (inp) inp.value = '';
+  const btn = document.getElementById(sectionId + '-pot-search-clear');
+  if (btn) btn.classList.remove('visible');
+  psHide(sectionId);
+
+  if (sectionId === 'chart') {
+    // Reset all filters to "All" — set everything to '' then cascade
+    document.getElementById('sel-potline').value = '';
+    document.getElementById('sel-potroom').value = '';
+    document.getElementById('sel-zone').value    = '';
+    document.getElementById('sel-potid').value   = '';
+    cascadeChartRooms();  // cascades: room → zone → pots (all reset to All)
+    updateChart();
+
+  } else if (sectionId === 'null') {
+    const sel = document.getElementById('null-sel-pot');
+    if (sel) { sel.value = ''; onNullFilterChange(); }
+
+  } else if (sectionId === 'health') {
+    document.getElementById('ph-sel-potline').value = '';
+    document.getElementById('ph-sel-potroom').value = '';
+    document.getElementById('ph-sel-zone').value    = '';
+    document.getElementById('ph-sel-potid').value   = '';
+    cascadePhRooms();     // cascades: room → zone → pots (all reset to All)
+    renderPotHealth();
+
+  } else if (sectionId === 'c4') {
+    C4.stack = []; C4.sortCol = null; c4Render();
+  }
+}
+
+function psHide(sectionId) {
+  const c = document.getElementById(sectionId + '-pot-suggestions');
+  if (c) c.classList.remove('open');
+}
+
+// Close suggestions when clicking outside any search bar
+document.addEventListener('click', function(e) {
+  ['chart','null','health','c4'].forEach(function(sid) {
+    const c   = document.getElementById(sid + '-pot-suggestions');
+    const inp = document.getElementById(sid + '-pot-search');
+    if (c && inp && !c.contains(e.target) && e.target !== inp) {
+      c.classList.remove('open');
+    }
+  });
+});
 
 </script>
 </body>
