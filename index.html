@@ -32,7 +32,11 @@ body { font-family: 'Segoe UI', sans-serif; background: #0f1117; color: #e0e0e0;
 .nav-tab:hover { color: #c0d4f0; background: #1e253a; }
 .nav-tab.active.tab-chart  { background: #162440; border-color: #2a4a80; color: #7eb8f7; border-bottom: 2px solid #4a90d9; }
 .nav-tab.active.tab-nulls  { background: #1e1630; border-color: #5a3a90; color: #b890f7; border-bottom: 2px solid #8a5ad9; }
+.nav-tab.active.tab-health { background: #162a1e; border-color: #2a6a3a; color: #6ecf9e; border-bottom: 2px solid #3aaf6a; }
+.nav-tab.active.tab-compliance4 { background: #261828; border-color: #6a2a5a; color: #e07ab8; border-bottom: 2px solid #c04a90; }
 .nav-tab.tab-nulls:not(.disabled):not(.active):hover { color: #c0a0f0; background: #1a1530; }
+.nav-tab.tab-health:not(.disabled):not(.active):hover { color: #90e0b0; background: #111f17; }
+.nav-tab.tab-compliance4:not(.disabled):not(.active):hover { color: #e090c0; background: #1c1020; }
 .nav-tab.disabled { opacity: 0.32; cursor: default; pointer-events: none; }
 
 .header-sep { flex: 1; }
@@ -52,6 +56,7 @@ body { font-family: 'Segoe UI', sans-serif; background: #0f1117; color: #e0e0e0;
 #welcome-screen {
   position: fixed; inset: 52px 0 0 0; z-index: 500;
   background: #0f1117; display: flex; align-items: center; justify-content: center;
+  overflow: auto; padding: 20px 0;
 }
 .welcome-box {
   border: 2px dashed #2a3a5a; border-radius: 20px;
@@ -893,6 +898,10 @@ input[type=date]:focus { border-color: #4a90d9; }
           <label class="filter-label">Year</label>
           <select id="null-sel-year" onchange="onNullYearChange()"><option value="">All Years</option></select>
         </div>
+        <div class="filter-group"><label class="filter-label">From</label>
+          <input type="date" id="null-date-from" onchange="renderAvailMatrix()"></div>
+        <div class="filter-group"><label class="filter-label">To</label>
+          <input type="date" id="null-date-to" onchange="renderAvailMatrix()"></div>
       </div>
       <div class="null-summary-cards">
         <div class="nsc"><div class="nsc-label">Parameters</div><div class="nsc-val" id="nsc-params">&#8212;</div></div>
@@ -1128,7 +1137,12 @@ input[type=date]:focus { border-color: #4a90d9; }
     <span style="width:1px;height:18px;background:#1e2130;flex-shrink:0;"></span>
     <div id="c4-breadcrumb" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;flex:1;min-width:0;font-size:0.76rem;"></div>
     <span id="c4-scope-badge" style="font-size:0.72rem;color:#5a6490;white-space:nowrap;flex-shrink:0;"></span>
-    <span style="width:1px;height:18px;background:#1e2130;flex-shrink:0;margin-left:4px;"></span>
+    <span style="width:1px;height:18px;background:#1e2130;flex-shrink:0;"></span>
+    <span style="font-size:0.64rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#5a6284;">From:</span>
+    <input type="date" id="c4-date-from" onchange="c4Render()" style="width:120px;flex-shrink:0;padding:2px 5px;font-size:0.72rem;background:#1a1d2e;border:1px solid #2a2d3e;color:#e0e0e0;border-radius:5px;outline:none;cursor:pointer;">
+    <span style="font-size:0.64rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#5a6284;">To:</span>
+    <input type="date" id="c4-date-to" onchange="c4Render()" style="width:120px;flex-shrink:0;padding:2px 5px;font-size:0.72rem;background:#1a1d2e;border:1px solid #2a2d3e;color:#e0e0e0;border-radius:5px;outline:none;cursor:pointer;">
+    <span style="width:1px;height:18px;background:#1e2130;flex-shrink:0;"></span>
     <div style="position:relative;flex-shrink:0;">
       <input type="text" class="pot-search-input compact" id="c4-pot-search"
         style="width:150px;"
@@ -1426,6 +1440,19 @@ function loadFromDefaultPath() {
       rebuildFilters();
       buildParamList();
       populateNullPotSelector();
+      // Reset compliance4 date filters for new data
+      if (ALL_DATA.length) {
+        const _c4dates = [...new Set(ALL_DATA.map(r => r.date).filter(Boolean))].sort();
+        const _c4df = document.getElementById('c4-date-from');
+        const _c4dt = document.getElementById('c4-date-to');
+        if (_c4df) _c4df.value = _c4dates[0] || '';
+        if (_c4dt) _c4dt.value = _c4dates[_c4dates.length - 1] || '';
+        // Reset pot health date filters for new data
+        const _phdf = document.getElementById('ph-date-from');
+        const _phdt = document.getElementById('ph-date-to');
+        if (_phdf) _phdf.value = _c4dates[0] || '';
+        if (_phdt) _phdt.value = _c4dates[_c4dates.length - 1] || '';
+      }
       hideLoading();
       updateChart();
 
@@ -1763,6 +1790,19 @@ function applyMapping() {
 
       rebuildFilters(); buildParamList();
       populateNullPotSelector();
+      // Reset compliance4 date filters for new data
+      if (ALL_DATA.length) {
+        const _c4dates = [...new Set(ALL_DATA.map(r => r.date).filter(Boolean))].sort();
+        const _c4df = document.getElementById('c4-date-from');
+        const _c4dt = document.getElementById('c4-date-to');
+        if (_c4df) _c4df.value = _c4dates[0] || '';
+        if (_c4dt) _c4dt.value = _c4dates[_c4dates.length - 1] || '';
+        // Reset pot health date filters for new data
+        const _phdf = document.getElementById('ph-date-from');
+        const _phdt = document.getElementById('ph-date-to');
+        if (_phdf) _phdf.value = _c4dates[0] || '';
+        if (_phdt) _phdt.value = _c4dates[_c4dates.length - 1] || '';
+      }
       hideLoading(); updateChart();
     } catch(err){ hideLoading(); alert('Error: '+err.message+'\n'+err.stack); }
   },30);
@@ -2142,6 +2182,12 @@ function populateNullPotSelector() {
   const sel = document.getElementById('null-sel-pot');
   sel.innerHTML = '<option value="">All Pots</option>';
   pids.forEach(v => { const o = document.createElement('option'); o.value = v; o.text = v; sel.appendChild(o); });
+  // Initialize date range from ALL_DATA
+  const dates = [...new Set(ALL_DATA.map(r => r.date).filter(Boolean))].sort();
+  const dFrom = document.getElementById('null-date-from');
+  const dTo   = document.getElementById('null-date-to');
+  if (dFrom && !dFrom.value) dFrom.value = dates[0] || '';
+  if (dTo   && !dTo.value)   dTo.value   = dates[dates.length - 1] || '';
   populateNullYears();
   renderAvailMatrix();
 }
@@ -2171,8 +2217,12 @@ const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct'
 function getMatrixRows() {
   const potFilter  = document.getElementById('null-sel-pot').value;
   const yearFilter = document.getElementById('null-sel-year').value;
+  const dfrom      = document.getElementById('null-date-from') ? document.getElementById('null-date-from').value : '';
+  const dto        = document.getElementById('null-date-to')   ? document.getElementById('null-date-to').value   : '';
   let rows = potFilter ? ALL_DATA.filter(r => r.pot_id === potFilter) : ALL_DATA;
   if (yearFilter) rows = rows.filter(r => r.date && r.date.slice(0,4) === yearFilter);
+  if (dfrom) rows = rows.filter(r => r.date && r.date >= dfrom);
+  if (dto)   rows = rows.filter(r => r.date && r.date <= dto);
   return rows;
 }
 
@@ -2350,8 +2400,10 @@ function rebuildPhFilters() {
   // Only populate Line from full data; Room/Zone/PotID cascade from selection
   refill('ph-sel-potline', uniq(ALL_DATA.map(r => r.pot_line)), v => 'Line ' + v, 'All Lines');
   const dates = uniq(ALL_DATA.map(r => r.date));
-  document.getElementById('ph-date-from').value = dates[0] || '';
-  document.getElementById('ph-date-to').value   = dates[dates.length - 1] || '';
+  const phDf = document.getElementById('ph-date-from');
+  const phDt = document.getElementById('ph-date-to');
+  if (phDf && !phDf.value) phDf.value = dates[0] || '';
+  if (phDt && !phDt.value) phDt.value = dates[dates.length - 1] || '';
   cascadePhRooms();
 }
 
@@ -3363,8 +3415,10 @@ function toggleCompliancePanel() {
   const reopenTab = document.getElementById('comp-reopen-tab');
 
   if (compPanelOpen) {
-    // Restore compliance panel
+    // Restore compliance panel — clear any inline sizes set by drag or close
     panel.style.display   = '';
+    panel.style.width     = '';
+    panel.style.flex      = '';
     if (divider) divider.style.display = '';
     if (phMain)  { phMain.style.width = ''; phMain.style.flex = ''; }
     if (reopenTab) reopenTab.style.display = 'none';
@@ -3533,7 +3587,11 @@ function c4Count(rows, consKey, corrKey) {
 
 // ── Filter ALL_DATA to rows matching current drilldown path ──────
 function c4FilteredData() {
+  const dfrom = document.getElementById('c4-date-from') ? document.getElementById('c4-date-from').value : '';
+  const dto   = document.getElementById('c4-date-to')   ? document.getElementById('c4-date-to').value   : '';
   let data = ALL_DATA;
+  if (dfrom) data = data.filter(r => r.date && r.date >= dfrom);
+  if (dto)   data = data.filter(r => r.date && r.date <= dto);
   for (const crumb of C4.stack) {
     if (crumb.level === 'zone' && crumb.value.includes('||')) {
       // Composite zone key: zone||line||room
@@ -3557,6 +3615,15 @@ function c4Init() {
   const { consKey, corrKey } = findComplianceKeys();
   const c4page = document.getElementById('compliance4-page');
   if (!c4page) return;
+
+  // Initialize date range inputs from ALL_DATA if not yet set
+  if (ALL_DATA.length) {
+    const dates = [...new Set(ALL_DATA.map(r => r.date).filter(Boolean))].sort();
+    const dFrom = document.getElementById('c4-date-from');
+    const dTo   = document.getElementById('c4-date-to');
+    if (dFrom && !dFrom.value) dFrom.value = dates[0] || '';
+    if (dTo   && !dTo.value)   dTo.value   = dates[dates.length - 1] || '';
+  }
 
   if (!consKey || !corrKey || !ALL_DATA.length) {
     document.getElementById('c4-content').innerHTML =
